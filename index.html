@@ -60,13 +60,22 @@
   </div>
 
   <script>
-    const repoUser = "RICZIN2008";       // ← coloque aqui seu nome de usuário
-    const repoName = "Chat";   // ← coloque aqui o nome do repositório
-    const token = "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";    // ← coloque aqui seu token do GitHub
+    const repoUser = "RICZIN2008";
+    const repoName = "Chat";
+    const token = "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";
     const fileName = "chat.txt";
     const rawURL = `https://raw.githubusercontent.com/${repoUser}/${repoName}/main/${fileName}`;
     const apiURL = `https://api.github.com/repos/${repoUser}/${repoName}/contents/${fileName}`;
-    let nomeUsuario = prompt("Seu nome:");
+
+    let nomeUsuario = localStorage.getItem("nomeUsuario");
+    if (!nomeUsuario) {
+      nomeUsuario = prompt("Digite seu nome:");
+      if (nomeUsuario) {
+        localStorage.setItem("nomeUsuario", nomeUsuario);
+      } else {
+        nomeUsuario = "Anônimo";
+      }
+    }
 
     async function carregarMensagens() {
       try {
@@ -74,7 +83,6 @@
         const text = await res.text();
         const linhas = text.split('\n');
         document.getElementById("chat").innerHTML = linhas.map(renderizarMensagem).join("<br>");
-
         if (linhas.length > 9000) iniciarContagemLimpeza();
       } catch (e) {
         document.getElementById("chat").innerText = "Erro ao carregar mensagens.";
@@ -102,27 +110,47 @@
 
       const novaLinha = `[${new Date().toLocaleTimeString()}] ${nomeUsuario}: ${msg}\n`;
 
-      const res = await fetch(apiURL, { headers: { Authorization: `token ${token}` } });
-      const fileData = await res.json();
-      const conteudoAtual = atob(fileData.content);
-      const novoConteudo = conteudoAtual + novaLinha;
-      const base64Content = btoa(unescape(encodeURIComponent(novoConteudo)));
+      try {
+        const res = await fetch(apiURL, {
+          headers: { Authorization: `token ${token}` }
+        });
 
-      await fetch(apiURL, {
-        method: "PUT",
-        headers: {
-          Authorization: `token ${token}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          message: "Nova mensagem",
-          content: base64Content,
-          sha: fileData.sha
-        })
-      });
+        if (!res.ok) {
+          alert("❌ Erro ao acessar o arquivo no GitHub. Verifique o token e o repositório.");
+          return;
+        }
 
-      document.getElementById("message").value = "";
-      carregarMensagens();
+        const fileData = await res.json();
+        const conteudoAtual = atob(fileData.content.replace(/\n/g, ''));
+        const novoConteudo = conteudoAtual + novaLinha;
+        const base64Content = btoa(unescape(encodeURIComponent(novoConteudo)));
+
+        const updateRes = await fetch(apiURL, {
+          method: "PUT",
+          headers: {
+            Authorization: `token ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            message: "Nova mensagem",
+            content: base64Content,
+            sha: fileData.sha
+          })
+        });
+
+        if (!updateRes.ok) {
+          const errorText = await updateRes.text();
+          console.error("Erro na atualização:", errorText);
+          alert("❌ Erro ao atualizar o arquivo. Veja o console.");
+        } else {
+          document.getElementById("message").value = "";
+          carregarMensagens();
+        }
+
+      } catch (e) {
+        console.error("Erro ao enviar mensagem:", e);
+        alert("❌ Ocorreu um erro ao enviar a mensagem.");
+      }
     }
 
     document.getElementById("send").onclick = () => enviarMensagem();
@@ -179,7 +207,7 @@
     }
 
     async function limparConversas() {
-      const base64 = btoa(""); // conteúdo limpo
+      const base64 = btoa("");
       const res = await fetch(apiURL, { headers: { Authorization: `token ${token}` } });
       const fileData = await res.json();
       await fetch(apiURL, {
@@ -203,4 +231,5 @@
     carregarMensagens();
   </script>
 </body>
-</html>
+  </html>
+  
